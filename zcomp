@@ -1,0 +1,78 @@
+#!/usr/bin/python -B
+
+from __future__ import print_function
+
+import sys, signal, time       # built-in modules
+import zstd                    # pip install zstd
+import argv                    # ./argv.py
+
+def main():
+    showHelp = argv.exists("--help")
+    argv.exitIfAnyUnparsedOptions()
+    if len(sys.argv) < 2 or showHelp:
+        print("Usage: zcomp [options] file ...")
+        print()
+        print("  options:")
+        print("    --help                      show this help message")
+        print()
+        print("  Compresses or decompresses the given file(s) with Zstandard.")
+        print("  Files with a .zst extension are decompressed. Other files are")
+        print("  compressed, and the .zst extension appended. Input files are")
+        print("  preserved in either case. Each input file yields exactly one")
+        print("  output file; packaging multiple files into an archive is not")
+        print("  supported.")
+        print()
+        print("  Examples:")
+        print("    zcomp meta.dat *.ppm")
+        print("    zcomp *.zst")
+        print()
+        sys.exit(-1)
+
+    t0 = time.time()
+    filenames, basenames = argv.filenames(sys.argv[1:])
+    zstfilenames, zstbasenames = argv.filenames(filenames, [".zst"])
+    rawfilenames = [f for f in filenames if f not in zstfilenames]
+    rawbasenames = [b for b in basenames if b not in zstbasenames]
+    enforce(len(filenames) > 0, "No files to process. Terminating.")
+    compress = len(rawfilenames) > 0
+    decompress = len(zstfilenames) > 0
+    enforce(compress != decompress, "Cannot compress and decompress at the same time.")
+    try:
+        signal.signal(signal.SIGINT, lambda s,f: onExit())  # Ctrl+C handler
+        if decompress:
+            zcomp = zstd.ZstdDecompressor()
+            infilenames = zstfilenames
+            outfilenames = zstbasenames
+            op = "Decompressing"
+        else:
+            zcomp = zstd.ZstdCompressor()
+            infilenames = rawfilenames
+            outfilenames = ["%s.zst"%(r) for r in rawfilenames]
+            op = "Compressing"
+        for infilename, outfilename in zip(infilenames, outfilenames):
+            print("%s %s into %s..."%(op, infilename, outfilename))
+            with open(infilename, "rb") as ifh, open(outfilename, "wb") as ofh:
+                zcomp.copy_stream(ifh, ofh)
+        print("Processing completed in %.2f seconds."%(time.time()-t0))
+    except TerminationRequest:
+        print("Processing terminated after %.2f seconds."%(time.time()-t0))
+    except Exception as e:
+        import traceback
+        traceback.print_exc(e)
+        print("Processing failed after %.2f seconds."%(time.time()-t0))
+    finally:
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+def enforce(expression, messageIfFalse):
+    if not expression:
+        print(messageIfFalse)
+        sys.exit(-1)
+
+def onExit():
+    raise TerminationRequest("Terminated by the user.")
+
+class TerminationRequest(IOError):
+    pass
+
+if __name__ == "__main__":
+    main()
