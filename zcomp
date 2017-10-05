@@ -3,7 +3,7 @@
 from __future__ import print_function
 
 import sys, signal, time       # built-in modules
-import zstd                    # pip install zstd
+import zstd                    # pip install zstandard
 import argv                    # ./argv.py
 
 def main():
