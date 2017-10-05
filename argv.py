@@ -4,7 +4,7 @@
 A collection of simple command-line parsing functions.
 """
 
-from __future__ import print_function
+from __future__ import print_function as __print  # hide from help(argv)
 
 import sys, os, glob
 
